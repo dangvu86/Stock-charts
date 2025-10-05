@@ -22,7 +22,10 @@ def get_cache_key(symbol, start_date, end_date, resolution):
         # Truncate time part if present
         end_date = end_date[:10]
 
-    return f"{symbol}_{start_date}_{end_date}_{resolution}"
+    # Cache version to force invalidate old cache (increment when data source changes)
+    CACHE_VERSION = "v2_vci"
+
+    return f"{CACHE_VERSION}_{symbol}_{start_date}_{end_date}_{resolution}"
 
 
 def calculate_common_indicators(df):

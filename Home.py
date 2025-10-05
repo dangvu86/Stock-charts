@@ -514,9 +514,6 @@ with st.spinner(f'⚡ Đang tải hàng 1 ({interval_display})...'):
 # Display Row 1 charts IMMEDIATELY (while Row 2 is loading next)
 with chart_cols_1[0]:
     df1 = stock_data_row1.get(selected_symbols[0])
-    if df1 is not None and not df1.empty:
-        # Debug info
-        st.caption(f"📊 {selected_symbols[0]}: {len(df1)} rows | {df1['time'].min().strftime('%Y-%m-%d')} → {df1['time'].max().strftime('%Y-%m-%d')}")
     fig1 = create_single_chart(
         selected_symbols[0], df1,
         height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,

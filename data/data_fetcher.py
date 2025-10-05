@@ -60,7 +60,7 @@ def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
             df = df.sort_values('time').reset_index(drop=True)
 
             print(f"[SUCCESS] Fetched {symbol} from {source} ({len(df)} rows)")
-            return df
+            return df, source
 
         except Exception as e:
             print(f"[ERROR] Failed to fetch {symbol} from {source}: {str(e)}")
@@ -68,10 +68,10 @@ def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
 
     # Tất cả sources đều fail
     print(f"[ERROR] All sources failed for {symbol}")
-    return None
+    return None, None
 
 
-def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicators=False):
+def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicators=False, _source_info=None):
     """
     Lấy dữ liệu cổ phiếu với session cache (bao gồm pre-calculated indicators)
 
@@ -87,6 +87,8 @@ def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicat
         Khung thời gian: '1D' (ngày), '1W' (tuần), '1M' (tháng)
     return_indicators : bool
         Nếu True, return (df, indicators_dict). Nếu False, chỉ return df
+    _source_info : dict (internal)
+        Dict để lưu source info, dùng để debug
 
     Returns:
     --------
@@ -97,14 +99,19 @@ def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicat
     # Check cache trước
     cached_df, cached_indicators = get_cached_data(symbol, start_date, end_date, resolution)
     if cached_df is not None:
+        if _source_info is not None:
+            _source_info['source'] = 'CACHE'
         if return_indicators:
             return cached_df, cached_indicators
         return cached_df
 
     # Fetch new data
-    df = fetch_stock_data_raw(symbol, start_date, end_date, resolution)
+    df, source_used = fetch_stock_data_raw(symbol, start_date, end_date, resolution)
 
     if df is not None:
+        if _source_info is not None:
+            _source_info['source'] = source_used
+
         # Lưu vào cache (tự động tính indicators)
         set_cached_data(symbol, start_date, end_date, resolution, df)
 
