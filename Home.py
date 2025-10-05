@@ -144,13 +144,25 @@ st.markdown("---")
 
 # Initialize session state for symbols
 if 'chart_symbols' not in st.session_state:
+    # Default symbols to try (in order of preference)
+    default_symbols = ['VNM', 'VCB', 'HPG', 'FPT', 'MBB', 'TCB']
+
+    # Helper function to get symbol safely
+    def get_safe_symbol(preferred_symbol, fallback_index):
+        if preferred_symbol in symbols:
+            return preferred_symbol
+        elif fallback_index < len(symbols):
+            return symbols[fallback_index]
+        else:
+            return symbols[0] if symbols else 'VNM'
+
     st.session_state['chart_symbols'] = {
-        's1': symbols[symbols.index('MWG')] if 'MWG' in symbols else symbols[0],
-        's2': symbols[symbols.index('VCB')] if 'VCB' in symbols else symbols[1] if len(symbols) > 1 else symbols[0],
-        's3': symbols[symbols.index('HPG')] if 'HPG' in symbols else symbols[2] if len(symbols) > 2 else symbols[0],
-        's4': symbols[symbols.index('FPT')] if 'FPT' in symbols else symbols[3] if len(symbols) > 3 else symbols[0],
-        's5': symbols[symbols.index('MBB')] if 'MBB' in symbols else symbols[4] if len(symbols) > 4 else symbols[0],
-        's6': symbols[symbols.index('TCB')] if 'TCB' in symbols else symbols[5] if len(symbols) > 5 else symbols[0],
+        's1': get_safe_symbol(default_symbols[0], 0),
+        's2': get_safe_symbol(default_symbols[1], 1),
+        's3': get_safe_symbol(default_symbols[2], 2),
+        's4': get_safe_symbol(default_symbols[3], 3),
+        's5': get_safe_symbol(default_symbols[4], 4),
+        's6': get_safe_symbol(default_symbols[5], 5),
     }
 
 

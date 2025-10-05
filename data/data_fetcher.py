@@ -17,36 +17,47 @@ from utils.cache_manager import get_cached_data, set_cached_data
 def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
     """
     Fetch data từ API (không cache tại đây)
+    Thử nhiều sources: TCBS (default) → VCI → MSN
     """
-    try:
-        stock = Vnstock().stock(symbol=symbol, source='VCI')
+    sources = ['TCBS', 'VCI', 'MSN']
 
-        df = stock.quote.history(
-            start=start_date,
-            end=end_date,
-            interval=resolution
-        )
+    for source in sources:
+        try:
+            stock = Vnstock().stock(symbol=symbol, source=source)
 
-        if df is None or df.empty:
-            return None
+            df = stock.quote.history(
+                start=start_date,
+                end=end_date,
+                interval=resolution
+            )
 
-        # Đổi tên cột cho dễ sử dụng
-        df.columns = df.columns.str.lower()
+            if df is None or df.empty:
+                print(f"[WARNING] No data returned for {symbol} from {source}, trying next source...")
+                continue
 
-        # Đảm bảo có cột time
-        if 'time' not in df.columns and 'date' in df.columns:
-            df.rename(columns={'date': 'time'}, inplace=True)
+            # Đổi tên cột cho dễ sử dụng
+            df.columns = df.columns.str.lower()
 
-        # Convert time to datetime
-        df['time'] = pd.to_datetime(df['time'])
+            # Đảm bảo có cột time
+            if 'time' not in df.columns and 'date' in df.columns:
+                df.rename(columns={'date': 'time'}, inplace=True)
 
-        # Sort by time
-        df = df.sort_values('time').reset_index(drop=True)
+            # Convert time to datetime
+            df['time'] = pd.to_datetime(df['time'])
 
-        return df
+            # Sort by time
+            df = df.sort_values('time').reset_index(drop=True)
 
-    except Exception as e:
-        return None
+            print(f"[SUCCESS] Fetched {symbol} from {source}")
+            return df
+
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch {symbol} from {source}: {str(e)}")
+            continue
+
+    # Tất cả sources đều fail
+    print(f"[ERROR] All sources failed for {symbol}")
+    return None
 
 
 def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicators=False):
