@@ -513,15 +513,18 @@ with st.spinner(f'⚡ Đang tải hàng 1 ({interval_display})...'):
 # Display Row 1 charts IMMEDIATELY (while Row 2 is loading next)
 with chart_cols_1[0]:
     df1 = stock_data_row1.get(selected_symbols[0])
-    fig1 = create_single_chart(
-        selected_symbols[0], df1,
-        height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,
-        display_start_date=display_start, display_end_date=display_end, interval=interval
-    )
-    if fig1:
-        st.plotly_chart(fig1, use_container_width=True, key='chart1')
+    if df1 is not None and not df1.empty:
+        fig1 = create_single_chart(
+            selected_symbols[0], df1,
+            height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,
+            display_start_date=display_start, display_end_date=display_end, interval=interval
+        )
+        if fig1:
+            st.plotly_chart(fig1, use_container_width=True, key='chart1')
+        else:
+            st.error(f"❌ Không thể tạo chart {selected_symbols[0]}")
     else:
-        st.error(f"❌ Không thể tải {selected_symbols[0]}")
+        st.error(f"❌ Không thể tải data {selected_symbols[0]}\n\nVui lòng check logs hoặc thử Clear Cache")
 
 with chart_cols_1[1]:
     fig2 = create_single_chart(

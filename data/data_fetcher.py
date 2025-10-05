@@ -11,53 +11,59 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
     """
-    Fetch data từ API - Force VCI source only
+    Fetch data từ API with multi-source fallback
     Cached for 5 minutes using Streamlit's built-in cache
     """
-    try:
-        # Force VCI source only (most reliable)
-        stock = Vnstock().stock(symbol=symbol, source='VCI')
+    sources = ['VCI', 'TCBS']  # Try VCI first, fallback to TCBS
 
-        df = stock.quote.history(
-            start=start_date,
-            end=end_date,
-            interval=resolution
-        )
+    for source in sources:
+        try:
+            stock = Vnstock().stock(symbol=symbol, source=source)
 
-        if df is None or df.empty:
-            print(f"[ERROR] No data returned for {symbol}")
-            return None
+            df = stock.quote.history(
+                start=start_date,
+                end=end_date,
+                interval=resolution
+            )
 
-        # Đổi tên cột cho dễ sử dụng
-        df.columns = df.columns.str.lower()
+            if df is None or df.empty:
+                print(f"[WARNING] No data from {source} for {symbol}, trying next...")
+                continue
 
-        # Đảm bảo có cột time (thử nhiều tên cột)
-        if 'time' not in df.columns:
-            if 'date' in df.columns:
-                df.rename(columns={'date': 'time'}, inplace=True)
-            elif 'datetime' in df.columns:
-                df.rename(columns={'datetime': 'time'}, inplace=True)
-            elif 'trading_date' in df.columns:
-                df.rename(columns={'trading_date': 'time'}, inplace=True)
+            # Đổi tên cột cho dễ sử dụng
+            df.columns = df.columns.str.lower()
 
-        # Kiểm tra có đủ columns cần thiết không
-        required_cols = ['time', 'open', 'high', 'low', 'close', 'volume']
-        if not all(col in df.columns for col in required_cols):
-            print(f"[ERROR] Missing columns for {symbol}: {df.columns.tolist()}")
-            return None
+            # Đảm bảo có cột time (thử nhiều tên cột)
+            if 'time' not in df.columns:
+                if 'date' in df.columns:
+                    df.rename(columns={'date': 'time'}, inplace=True)
+                elif 'datetime' in df.columns:
+                    df.rename(columns={'datetime': 'time'}, inplace=True)
+                elif 'trading_date' in df.columns:
+                    df.rename(columns={'trading_date': 'time'}, inplace=True)
 
-        # Convert time to datetime
-        df['time'] = pd.to_datetime(df['time'])
+            # Kiểm tra có đủ columns cần thiết không
+            required_cols = ['time', 'open', 'high', 'low', 'close', 'volume']
+            if not all(col in df.columns for col in required_cols):
+                print(f"[WARNING] Missing columns from {source} for {symbol}: {df.columns.tolist()}")
+                continue
 
-        # Sort by time
-        df = df.sort_values('time').reset_index(drop=True)
+            # Convert time to datetime
+            df['time'] = pd.to_datetime(df['time'])
 
-        print(f"[SUCCESS] Fetched {symbol} from VCI ({len(df)} rows, {df['time'].min()} to {df['time'].max()})")
-        return df
+            # Sort by time
+            df = df.sort_values('time').reset_index(drop=True)
 
-    except Exception as e:
-        print(f"[ERROR] Failed to fetch {symbol}: {str(e)}")
-        return None
+            print(f"[SUCCESS] Fetched {symbol} from {source} ({len(df)} rows)")
+            return df
+
+        except Exception as e:
+            print(f"[ERROR] {source} failed for {symbol}: {str(e)}")
+            continue
+
+    # All sources failed
+    print(f"[ERROR] All sources failed for {symbol}")
+    return None
 
 
 def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicators=False):
