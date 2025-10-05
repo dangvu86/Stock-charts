@@ -16,62 +16,55 @@ from utils.cache_manager import get_cached_data, set_cached_data
 
 def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
     """
-    Fetch data từ API (không cache tại đây)
-    Thử nhiều sources: VCI (default) → TCBS → MSN
+    Fetch data từ API - Force VCI source only
     """
-    sources = ['VCI', 'TCBS', 'MSN']
+    try:
+        # Force VCI source only (most reliable)
+        stock = Vnstock().stock(symbol=symbol, source='VCI')
 
-    for source in sources:
-        try:
-            stock = Vnstock().stock(symbol=symbol, source=source)
+        df = stock.quote.history(
+            start=start_date,
+            end=end_date,
+            interval=resolution
+        )
 
-            df = stock.quote.history(
-                start=start_date,
-                end=end_date,
-                interval=resolution
-            )
+        if df is None or df.empty:
+            print(f"[ERROR] No data returned for {symbol}")
+            return None
 
-            if df is None or df.empty:
-                print(f"[WARNING] No data returned for {symbol} from {source}, trying next source...")
-                continue
+        # Đổi tên cột cho dễ sử dụng
+        df.columns = df.columns.str.lower()
 
-            # Đổi tên cột cho dễ sử dụng
-            df.columns = df.columns.str.lower()
+        # Đảm bảo có cột time (thử nhiều tên cột)
+        if 'time' not in df.columns:
+            if 'date' in df.columns:
+                df.rename(columns={'date': 'time'}, inplace=True)
+            elif 'datetime' in df.columns:
+                df.rename(columns={'datetime': 'time'}, inplace=True)
+            elif 'trading_date' in df.columns:
+                df.rename(columns={'trading_date': 'time'}, inplace=True)
 
-            # Đảm bảo có cột time (thử nhiều tên cột)
-            if 'time' not in df.columns:
-                if 'date' in df.columns:
-                    df.rename(columns={'date': 'time'}, inplace=True)
-                elif 'datetime' in df.columns:
-                    df.rename(columns={'datetime': 'time'}, inplace=True)
-                elif 'trading_date' in df.columns:
-                    df.rename(columns={'trading_date': 'time'}, inplace=True)
+        # Kiểm tra có đủ columns cần thiết không
+        required_cols = ['time', 'open', 'high', 'low', 'close', 'volume']
+        if not all(col in df.columns for col in required_cols):
+            print(f"[ERROR] Missing columns for {symbol}: {df.columns.tolist()}")
+            return None
 
-            # Kiểm tra có đủ columns cần thiết không
-            required_cols = ['time', 'open', 'high', 'low', 'close', 'volume']
-            if not all(col in df.columns for col in required_cols):
-                print(f"[WARNING] Missing columns for {symbol} from {source}: {df.columns.tolist()}")
-                continue
+        # Convert time to datetime
+        df['time'] = pd.to_datetime(df['time'])
 
-            # Convert time to datetime
-            df['time'] = pd.to_datetime(df['time'])
+        # Sort by time
+        df = df.sort_values('time').reset_index(drop=True)
 
-            # Sort by time
-            df = df.sort_values('time').reset_index(drop=True)
+        print(f"[SUCCESS] Fetched {symbol} from VCI ({len(df)} rows)")
+        return df
 
-            print(f"[SUCCESS] Fetched {symbol} from {source} ({len(df)} rows)")
-            return df, source
-
-        except Exception as e:
-            print(f"[ERROR] Failed to fetch {symbol} from {source}: {str(e)}")
-            continue
-
-    # Tất cả sources đều fail
-    print(f"[ERROR] All sources failed for {symbol}")
-    return None, None
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch {symbol}: {str(e)}")
+        return None
 
 
-def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicators=False, _source_info=None):
+def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicators=False):
     """
     Lấy dữ liệu cổ phiếu với session cache (bao gồm pre-calculated indicators)
 
@@ -87,8 +80,6 @@ def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicat
         Khung thời gian: '1D' (ngày), '1W' (tuần), '1M' (tháng)
     return_indicators : bool
         Nếu True, return (df, indicators_dict). Nếu False, chỉ return df
-    _source_info : dict (internal)
-        Dict để lưu source info, dùng để debug
 
     Returns:
     --------
@@ -99,19 +90,14 @@ def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicat
     # Check cache trước
     cached_df, cached_indicators = get_cached_data(symbol, start_date, end_date, resolution)
     if cached_df is not None:
-        if _source_info is not None:
-            _source_info['source'] = 'CACHE'
         if return_indicators:
             return cached_df, cached_indicators
         return cached_df
 
     # Fetch new data
-    df, source_used = fetch_stock_data_raw(symbol, start_date, end_date, resolution)
+    df = fetch_stock_data_raw(symbol, start_date, end_date, resolution)
 
     if df is not None:
-        if _source_info is not None:
-            _source_info['source'] = source_used
-
         # Lưu vào cache (tự động tính indicators)
         set_cached_data(symbol, start_date, end_date, resolution, df)
 
