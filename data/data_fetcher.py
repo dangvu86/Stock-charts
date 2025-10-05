@@ -17,9 +17,9 @@ from utils.cache_manager import get_cached_data, set_cached_data
 def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
     """
     Fetch data từ API (không cache tại đây)
-    Thử nhiều sources: TCBS (default) → VCI → MSN
+    Thử nhiều sources: VCI (default) → TCBS → MSN
     """
-    sources = ['TCBS', 'VCI', 'MSN']
+    sources = ['VCI', 'TCBS', 'MSN']
 
     for source in sources:
         try:
@@ -38,9 +38,20 @@ def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
             # Đổi tên cột cho dễ sử dụng
             df.columns = df.columns.str.lower()
 
-            # Đảm bảo có cột time
-            if 'time' not in df.columns and 'date' in df.columns:
-                df.rename(columns={'date': 'time'}, inplace=True)
+            # Đảm bảo có cột time (thử nhiều tên cột)
+            if 'time' not in df.columns:
+                if 'date' in df.columns:
+                    df.rename(columns={'date': 'time'}, inplace=True)
+                elif 'datetime' in df.columns:
+                    df.rename(columns={'datetime': 'time'}, inplace=True)
+                elif 'trading_date' in df.columns:
+                    df.rename(columns={'trading_date': 'time'}, inplace=True)
+
+            # Kiểm tra có đủ columns cần thiết không
+            required_cols = ['time', 'open', 'high', 'low', 'close', 'volume']
+            if not all(col in df.columns for col in required_cols):
+                print(f"[WARNING] Missing columns for {symbol} from {source}: {df.columns.tolist()}")
+                continue
 
             # Convert time to datetime
             df['time'] = pd.to_datetime(df['time'])
@@ -48,7 +59,7 @@ def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
             # Sort by time
             df = df.sort_values('time').reset_index(drop=True)
 
-            print(f"[SUCCESS] Fetched {symbol} from {source}")
+            print(f"[SUCCESS] Fetched {symbol} from {source} ({len(df)} rows)")
             return df
 
         except Exception as e:
