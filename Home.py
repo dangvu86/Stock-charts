@@ -135,6 +135,14 @@ show_macd = st.sidebar.checkbox("MACD", value=True)
 show_volume = st.sidebar.checkbox("Volume", value=True)
 
 st.sidebar.markdown("---")
+
+# Cache management
+from utils.cache_manager import clear_cache
+if st.sidebar.button("🔄 Clear Cache"):
+    clear_cache()
+    st.sidebar.success("✅ Cache cleared!")
+    st.rerun()
+
 st.sidebar.info("💡 Chọn mã cổ phiếu ở dropdown trên mỗi chart")
 
 # Title
