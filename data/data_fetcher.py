@@ -54,7 +54,13 @@ def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
             # Sort by time
             df = df.sort_values('time').reset_index(drop=True)
 
+            # Log success with source info
             print(f"[SUCCESS] Fetched {symbol} from {source} ({len(df)} rows)")
+
+            # Store source info in dataframe metadata (for debugging)
+            df.attrs['source'] = source
+            df.attrs['fetch_time'] = pd.Timestamp.now()
+
             return df
 
         except Exception as e:
