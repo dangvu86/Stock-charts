@@ -136,10 +136,9 @@ show_volume = st.sidebar.checkbox("Volume", value=True)
 
 st.sidebar.markdown("---")
 
-# Cache management
-from utils.cache_manager import clear_cache
+# Cache management - Use Streamlit's built-in cache clear
 if st.sidebar.button("🔄 Clear Cache"):
-    clear_cache()
+    st.cache_data.clear()
     st.sidebar.success("✅ Cache cleared!")
     st.rerun()
 

@@ -6,17 +6,13 @@ from vnstock import Vnstock
 from datetime import datetime, timedelta
 import streamlit as st
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import sys
-import os
-
-# Add utils to path
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from utils.cache_manager import get_cached_data, set_cached_data
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
     """
     Fetch data từ API - Force VCI source only
+    Cached for 5 minutes using Streamlit's built-in cache
     """
     try:
         # Force VCI source only (most reliable)
@@ -56,7 +52,7 @@ def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
         # Sort by time
         df = df.sort_values('time').reset_index(drop=True)
 
-        print(f"[SUCCESS] Fetched {symbol} from VCI ({len(df)} rows)")
+        print(f"[SUCCESS] Fetched {symbol} from VCI ({len(df)} rows, {df['time'].min()} to {df['time'].max()})")
         return df
 
     except Exception as e:
@@ -66,7 +62,7 @@ def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
 
 def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicators=False):
     """
-    Lấy dữ liệu cổ phiếu với session cache (bao gồm pre-calculated indicators)
+    Lấy dữ liệu cổ phiếu (sử dụng @st.cache_data decorator)
 
     Parameters:
     -----------
@@ -87,27 +83,41 @@ def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicat
         Nếu return_indicators=True: (DataFrame, dict of indicators)
         Nếu return_indicators=False: DataFrame
     """
-    # Check cache trước
-    cached_df, cached_indicators = get_cached_data(symbol, start_date, end_date, resolution)
-    if cached_df is not None:
-        if return_indicators:
-            return cached_df, cached_indicators
-        return cached_df
-
-    # Fetch new data
+    # Fetch data (automatically cached by decorator)
     df = fetch_stock_data_raw(symbol, start_date, end_date, resolution)
 
-    if df is not None:
-        # Lưu vào cache (tự động tính indicators)
-        set_cached_data(symbol, start_date, end_date, resolution, df)
-
-        # Get cached indicators
-        if return_indicators:
-            _, indicators = get_cached_data(symbol, start_date, end_date, resolution)
-            return df, indicators
-
     if return_indicators:
-        return df, {}
+        # Calculate indicators on-the-fly (simple approach)
+        from indicators.technical import (
+            calculate_sma, calculate_ema, calculate_rsi,
+            calculate_macd, calculate_bollinger_bands
+        )
+
+        if df is not None and not df.empty:
+            indicators = {}
+            try:
+                # Common indicators
+                for period in [5, 10, 20, 50, 100, 200]:
+                    indicators[f'sma{period}'] = calculate_sma(df, period)
+                    indicators[f'ema{period}'] = calculate_ema(df, period)
+
+                indicators['rsi14'] = calculate_rsi(df, 14)
+
+                macd_data = calculate_macd(df)
+                indicators['macd'] = macd_data['macd']
+                indicators['macd_signal'] = macd_data['signal']
+                indicators['macd_histogram'] = macd_data['histogram']
+
+                bb_data = calculate_bollinger_bands(df, 20, 2)
+                indicators['bb_upper'] = bb_data['upper']
+                indicators['bb_middle'] = bb_data['middle']
+                indicators['bb_lower'] = bb_data['lower']
+            except:
+                pass
+
+            return df, indicators
+        else:
+            return df, {}
 
     return df
 
@@ -154,9 +164,11 @@ def get_multiple_stocks_parallel(symbols, start_date, end_date, resolution='1D',
     return results
 
 
+@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def get_available_symbols():
     """
     Lấy danh sách tất cả mã cổ phiếu từ 3 sàn (HOSE, HNX, UPCOM)
+    Cached for 1 hour using Streamlit's built-in cache
     """
     try:
         stock = Vnstock().stock(symbol='ACB', source='VCI')
@@ -166,16 +178,18 @@ def get_available_symbols():
 
         if df is not None and not df.empty and 'symbol' in df.columns:
             all_symbols = df['symbol'].tolist()
+            print(f"[SUCCESS] Loaded {len(all_symbols)} symbols from VCI")
             return sorted(set(all_symbols))
 
         # Fallback nếu API lỗi
         raise Exception("API error")
 
-    except:
+    except Exception as e:
+        print(f"[WARNING] Failed to load symbols from VCI: {str(e)}")
         # Fallback: danh sách phổ biến
         return sorted(set([
             'VNM', 'VCB', 'HPG', 'VHM', 'VIC', 'MSN', 'FPT', 'SSI',
-            'MBB', 'TCB', 'CTG', 'ACB', 'VPB', 'VRE', 'BCM', 'GAS',
+            'MBB', 'TCB', 'CTG', 'ACB', 'VPB', 'VRE', 'GAS',
             'PLX', 'POW', 'SAB', 'BVH', 'MWG', 'PNJ', 'HDB'
         ]))
 
