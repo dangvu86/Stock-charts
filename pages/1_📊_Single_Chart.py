@@ -59,12 +59,31 @@ symbol = st.sidebar.selectbox(
     index=symbols.index('HPG') if 'HPG' in symbols else 0
 )
 
-# 2. Timeline (Khoảng thời gian hiển thị)
+# 2. Timeframe (move before timeline to use in default selection)
+st.sidebar.subheader("📊 Khung thời gian")
+timeframe = st.sidebar.radio(
+    "Interval:",
+    options=['1D', '1W', '1M'],
+    format_func=lambda x: {'1D': 'Ngày', '1W': 'Tuần', '1M': 'Tháng'}[x],
+    index=0,
+    horizontal=True
+)
+
+# 3. Timeline (Khoảng thời gian hiển thị) - auto-adjust based on interval
 st.sidebar.subheader("📅 Khoảng thời gian")
+
+# Auto-adjust default timeline based on interval
+if timeframe == '1M':
+    default_timeline_index = 2  # 1 năm (12 nến) for monthly
+elif timeframe == '1W':
+    default_timeline_index = 2  # 1 năm (52 nến) for weekly
+else:
+    default_timeline_index = 2  # 1 năm for daily (default)
+
 timeline_option = st.sidebar.radio(
     "Timeline:",
     options=["3 tháng", "6 tháng", "1 năm", "YTD", "Tùy chỉnh"],
-    index=2,  # Mặc định 1 năm
+    index=default_timeline_index,
     horizontal=True
 )
 
@@ -101,16 +120,6 @@ if timeline_option == "Tùy chỉnh":
 else:
     start_date = display_start_default
     end_date = display_end_default
-
-# 3. Timeframe
-st.sidebar.subheader("📊 Khung thời gian")
-timeframe = st.sidebar.radio(
-    "Interval:",
-    options=['1D', '1W', '1M'],
-    format_func=lambda x: {'1D': 'Ngày', '1W': 'Tuần', '1M': 'Tháng'}[x],
-    index=0,
-    horizontal=True
-)
 
 st.sidebar.markdown("---")
 

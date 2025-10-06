@@ -13,8 +13,18 @@ def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
     """
     Fetch data từ API with multi-source fallback
     Cached for 5 minutes using Streamlit's built-in cache
+
+    IMPORTANT:
+    - TCBS: Works for 1D but ignores date range for 1W/1M (returns all historical data)
+    - VCI: Works correctly for all intervals (1D, 1W, 1M) with proper date filtering
     """
-    sources = ['TCBS']  # TCBS only - works on both local and cloud
+    # Choose source based on interval
+    # TCBS has bug: returns 250+ rows for 1W/1M instead of respecting date range
+    # VCI respects date range correctly for all intervals
+    if resolution in ['1W', '1M']:
+        sources = ['VCI', 'TCBS']  # VCI first for weekly/monthly
+    else:
+        sources = ['TCBS', 'VCI']  # TCBS first for daily (faster, more reliable on cloud)
 
     for source in sources:
         try:

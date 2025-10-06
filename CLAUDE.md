@@ -89,19 +89,28 @@ Use cached indicators (ma20, ma50, rsi14, macd, etc.)
 ### Critical Implementation Details
 
 #### 1. Data Fetching (data/data_fetcher.py)
-- Uses `vnstock` library version ==3.2.6 with API: `Vnstock().stock(symbol, source='TCBS')`
+- Uses `vnstock` library version ==3.2.6 with API: `Vnstock().stock(symbol, source='VCI'|'TCBS')`
 - API method: `stock.quote.history(start, end, interval)`
 - Intervals: `'1D'` (day), `'1W'` (week), `'1M'` (month)
-- **Data Source**: TCBS (works consistently on both local and Streamlit Cloud)
-  - VCI source fails on Streamlit Cloud due to network/firewall issues
-  - TCBS API has a bug with ~247 duplicate dates (handled automatically)
+
+- **Data Source Strategy** (CRITICAL - source selection based on interval):
+  - **For 1D (Daily)**: TCBS first, fallback to VCI
+    - TCBS works correctly and is faster on Streamlit Cloud
+  - **For 1W/1M (Weekly/Monthly)**: VCI first, fallback to TCBS
+    - **TCBS BUG**: Ignores `start_date` parameter for 1W/1M intervals
+    - TCBS returns ALL historical data (250+ rows from 2020 for 1W, 238+ rows from 2006 for 1M)
+    - VCI correctly respects date range: 1 year = 53 rows (1W) or 13 rows (1M)
+  - VCI may fail on Streamlit Cloud due to network/firewall issues (need testing)
+  - TCBS has ~247 duplicate dates bug (handled via deduplication)
   - Deduplication: `df.drop_duplicates(subset=['time'], keep='last')`
+
 - **Stock List**: Fetches all symbols from 3 Vietnamese exchanges (HOSE, HNX, UPCOM) using `stock.listing.all_symbols()` - returns ~1719 stocks
 - **Data Strategy**:
   - Multi-Chart (Home.py): Fetch 2 years (`timedelta(days=730)`)
   - Single Chart: Fetch 3 years (`timedelta(days=1095)`)
   - Always calculate indicators on full dataset, then filter for display
 - **Caching**: Streamlit `@st.cache_data` with 5-minute TTL (ttl=300)
+  - Cache key automatically includes `symbol`, `start_date`, `end_date`, `resolution`
 
 #### 2. Chart Creation (Home.py: create_single_chart)
 - **Two-phase data strategy**:
@@ -164,7 +173,11 @@ Displays 4 key metrics at the top of the page:
    - Tháng (1M)
 
 2. **Timeline (Khoảng thời gian)**:
-   - 3 tháng, 6 tháng (default), 1 năm, YTD, Tùy chỉnh (custom date picker)
+   - 3 tháng, 6 tháng, 1 năm, YTD, Tùy chỉnh (custom date picker)
+   - **Auto-adjusts based on interval**:
+     - Daily (1D): Default 6 tháng (~126 candles)
+     - Weekly (1W): Default 1 năm (~52 candles)
+     - Monthly (1M): Default 1 năm (~12 candles)
 
 3. **Indicators**:
    - Moving Average: MA20, MA50 (default), with options for MA5, 10, 100, 200
