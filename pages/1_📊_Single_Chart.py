@@ -178,35 +178,57 @@ if df is not None and not df.empty:
     # Keep a copy of df_full for indicator filtering (like in Multi Chart)
     df_original = df_full.copy()
 
-    # Display metrics
+    # Display metrics - 52 week high/low/volume
     latest = df.iloc[-1]
     previous = df.iloc[-2] if len(df) > 1 else df.iloc[-1]
+    current_price = latest['close']
+
+    # Calculate 52-week metrics (364 days) - ALWAYS use df_full, not filtered df
+    date_52w_ago = df_full['time'].max() - timedelta(days=364)
+    df_52w = df_full[df_full['time'] >= date_52w_ago]
+
+    if not df_52w.empty:
+        highest_52w = df_52w['high'].max()
+        lowest_52w = df_52w['low'].min()
+        highest_vol_52w = df_52w['volume'].max()
+
+        # Calculate % difference from current price
+        diff_from_high = ((current_price - highest_52w) / highest_52w) * 100
+        diff_from_low = ((current_price - lowest_52w) / lowest_52w) * 100
+    else:
+        highest_52w = latest['high']
+        lowest_52w = latest['low']
+        highest_vol_52w = latest['volume']
+        diff_from_high = 0
+        diff_from_low = 0
 
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric(
             label="💰 Giá hiện tại",
-            value=format_price(latest['close']),
-            delta=f"{calculate_change(latest['close'], previous['close']):.2f}%"
+            value=format_price(current_price),
+            delta=f"{calculate_change(current_price, previous['close']):.2f}%"
         )
 
     with col2:
         st.metric(
-            label="📈 Cao nhất",
-            value=format_price(latest['high'])
+            label="📈 Highest 52W",
+            value=format_price(highest_52w),
+            delta=f"{diff_from_high:.2f}%" if diff_from_high != 0 else None
         )
 
     with col3:
         st.metric(
-            label="📉 Thấp nhất",
-            value=format_price(latest['low'])
+            label="📉 Lowest 52W",
+            value=format_price(lowest_52w),
+            delta=f"{diff_from_low:.2f}%" if diff_from_low != 0 else None
         )
 
     with col4:
         st.metric(
-            label="📊 Khối lượng",
-            value=f"{latest['volume']:,.0f}" if 'volume' in df.columns else "N/A"
+            label="📊 Max Volume 52W",
+            value=f"{highest_vol_52w:,.0f}"
         )
 
     st.markdown("---")

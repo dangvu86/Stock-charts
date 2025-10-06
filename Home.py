@@ -514,12 +514,6 @@ with st.spinner(f'⚡ Đang tải hàng 1 ({interval_display})...'):
 with chart_cols_1[0]:
     df1 = stock_data_row1.get(selected_symbols[0])
     if df1 is not None and not df1.empty:
-        # Debug info - show data range, source, and latest close price
-        latest_close = df1['close'].iloc[-1]
-        data_range = f"{df1['time'].min().strftime('%Y-%m-%d')} → {df1['time'].max().strftime('%Y-%m-%d')}"
-        source_info = df1.attrs.get('source', 'Unknown')
-        st.caption(f"📊 {selected_symbols[0]} ({source_info}): {len(df1)} rows | {data_range} | Close: {latest_close:,.1f}")
-
         fig1 = create_single_chart(
             selected_symbols[0], df1,
             height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,

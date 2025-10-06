@@ -32,6 +32,7 @@ This is a Vietnamese stock chart analyzer with two main views:
    - Timeline selector: 3 tháng, 6 tháng, 1 năm (default), YTD, Tùy chỉnh
    - Loads 3 years of data for accurate MA calculations
    - Rangebreaks: Shows only trading days (hides weekends/holidays)
+   - **52-Week Metrics**: Highest/Lowest price and Max volume in 52 weeks with % comparison to current price
 
 ### Key Performance Optimization
 
@@ -88,15 +89,19 @@ Use cached indicators (ma20, ma50, rsi14, macd, etc.)
 ### Critical Implementation Details
 
 #### 1. Data Fetching (data/data_fetcher.py)
-- Uses `vnstock` library version >=1.0.30 with API: `Vnstock().stock(symbol, source='VCI')`
+- Uses `vnstock` library version ==3.2.6 with API: `Vnstock().stock(symbol, source='TCBS')`
 - API method: `stock.quote.history(start, end, interval)`
 - Intervals: `'1D'` (day), `'1W'` (week), `'1M'` (month)
+- **Data Source**: TCBS (works consistently on both local and Streamlit Cloud)
+  - VCI source fails on Streamlit Cloud due to network/firewall issues
+  - TCBS API has a bug with ~247 duplicate dates (handled automatically)
+  - Deduplication: `df.drop_duplicates(subset=['time'], keep='last')`
 - **Stock List**: Fetches all symbols from 3 Vietnamese exchanges (HOSE, HNX, UPCOM) using `stock.listing.all_symbols()` - returns ~1719 stocks
 - **Data Strategy**:
   - Multi-Chart (Home.py): Fetch 2 years (`timedelta(days=730)`)
   - Single Chart: Fetch 3 years (`timedelta(days=1095)`)
   - Always calculate indicators on full dataset, then filter for display
-- **Caching**: Session state cache with 5-minute TTL, stores both raw data and 19 pre-calculated indicators
+- **Caching**: Streamlit `@st.cache_data` with 5-minute TTL (ttl=300)
 
 #### 2. Chart Creation (Home.py: create_single_chart)
 - **Two-phase data strategy**:
@@ -127,6 +132,30 @@ Use cached indicators (ma20, ma50, rsi14, macd, etc.)
 - **Light theme** (utils/light_theme.py): Used in both Multi-Chart and Single Chart pages
 - TradingView-style color scheme with white background, subtle gridlines
 
+### Single Chart Metrics (pages/1_📊_Single_Chart.py)
+
+Displays 4 key metrics at the top of the page:
+
+1. **💰 Giá hiện tại (Current Price)**
+   - Latest closing price
+   - Shows % change vs previous day
+
+2. **📈 Highest 52W**
+   - Highest price in last 52 weeks (364 days)
+   - Shows % difference from current price
+   - Formula: `((current - highest_52w) / highest_52w) * 100`
+
+3. **📉 Lowest 52W**
+   - Lowest price in last 52 weeks (364 days)
+   - Shows % difference from current price
+   - Formula: `((current - lowest_52w) / lowest_52w) * 100`
+
+4. **📊 Max Volume 52W**
+   - Highest trading volume in last 52 weeks
+   - No percentage comparison (absolute value only)
+
+**Calculation:** Uses `df_52w = df[df['time'] >= date_52w_ago]` where `date_52w_ago = max_date - 364 days`
+
 ### Sidebar Options (Home.py)
 
 1. **Interval (Khung thời gian)**:
@@ -144,27 +173,32 @@ Use cached indicators (ma20, ma50, rsi14, macd, etc.)
 
 ### Common Pitfalls & Solutions
 
-1. **MA lines breaking/gaps on weekly/monthly charts**:
+1. **TCBS API returns duplicate dates** (NEW):
+   - Issue: TCBS source returns ~247 duplicate dates (mostly from Sept-Oct 2024)
+   - Fix: Automatic deduplication in `fetch_stock_data_raw()` using `df.drop_duplicates(subset=['time'], keep='last')`
+   - After dedup: 497 rows (same as VCI clean data)
+
+2. **MA lines breaking/gaps on weekly/monthly charts**:
    - Cause: Filtering indicators with wrong DataFrame reference or not resetting index
    - Fix: Use `df_original` for time filtering, reset index, remove NaN values, set `connectgaps=False`
 
-2. **Charts overlapping on weekly/monthly intervals**:
+3. **Charts overlapping on weekly/monthly intervals**:
    - Cause: Rangebreaks applied to non-daily intervals
    - Fix: Only apply rangebreaks when `interval == '1D'`
 
-3. **Volume bars too tall/obscuring price**:
+4. **Volume bars too tall/obscuring price**:
    - Fix: Adjust secondary Y-axis range (currently `max_volume * 6.67` for ~15% height)
 
-4. **Slow loading**:
+5. **Slow loading**:
    - Check if parallel loading is working (should use `ThreadPoolExecutor`)
-   - Verify session cache is enabled (check `utils/cache_manager.py`)
+   - Verify `@st.cache_data` decorator is applied with ttl=300
 
-5. **MA not showing on recent dates (showing only at start of chart)**:
+6. **MA not showing on recent dates (showing only at start of chart)**:
    - Cause: Missing `min_periods=1` in rolling operations causes NaN propagation
    - Fix: All rolling operations in `indicators/technical.py` now have `min_periods=1`
    - Example error: Tet holiday NaN → MA50 shows NaN for last 36 weeks on weekly chart
 
-6. **Cache not working after 1 hour**:
+7. **Cache not working after 1 hour**:
    - Cause: Using `.seconds` instead of `.total_seconds()` for timedelta comparison
    - Fix: Use `(datetime.now() - cache_time).total_seconds() < 300` in cache_manager.py
 

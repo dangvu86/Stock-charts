@@ -14,7 +14,7 @@ def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
     Fetch data từ API with multi-source fallback
     Cached for 5 minutes using Streamlit's built-in cache
     """
-    sources = ['VCI', 'TCBS']  # Try VCI first, fallback to TCBS
+    sources = ['TCBS']  # TCBS only - works on both local and cloud
 
     for source in sources:
         try:
@@ -54,12 +54,16 @@ def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
             # Sort by time
             df = df.sort_values('time').reset_index(drop=True)
 
-            # Log success with source info
-            print(f"[SUCCESS] Fetched {symbol} from {source} ({len(df)} rows)")
+            # Check for duplicates and remove if exists
+            duplicates_before = len(df)
+            df = df.drop_duplicates(subset=['time'], keep='last').reset_index(drop=True)
+            duplicates_removed = duplicates_before - len(df)
 
-            # Store source info in dataframe metadata (for debugging)
-            df.attrs['source'] = source
-            df.attrs['fetch_time'] = pd.Timestamp.now()
+            if duplicates_removed > 0:
+                print(f"[WARNING] Removed {duplicates_removed} duplicate dates for {symbol} from {source}")
+
+            # Log success with source info
+            print(f"[SUCCESS] Fetched {symbol} from {source} ({len(df)} rows after dedup)")
 
             return df
 
@@ -207,10 +211,10 @@ def get_available_symbols():
 
 
 def format_price(price):
-    """Format giá theo định dạng VN (VD: 120,000)"""
+    """Format giá theo định dạng VN với 2 số thập phân (VD: 120,000.50)"""
     if price is None:
         return "N/A"
-    return f"{price:,.0f}"
+    return f"{price:,.2f}"
 
 
 def calculate_change(current, previous):
