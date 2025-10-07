@@ -193,26 +193,37 @@ def get_multiple_stocks_parallel(symbols, start_date, end_date, resolution='1D',
 @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def get_available_symbols():
     """
-    Lấy danh sách tất cả mã cổ phiếu từ 3 sàn (HOSE, HNX, UPCOM)
+    Lấy danh sách mã cổ phiếu từ Google Drive CSV
     Cached for 1 hour using Streamlit's built-in cache
     """
+    import requests
+
+    # Google Drive direct download link
+    drive_url = "https://drive.usercontent.google.com/uc?id=1wbBwe3L4m4Yw1NNnOQwePpNxFORxbkmv&export=download"
+
     try:
-        stock = Vnstock().stock(symbol='ACB', source='VCI')
+        response = requests.get(drive_url, timeout=10)
+        response.raise_for_status()
 
-        # Lấy tất cả symbols (1700+ mã từ 3 sàn)
-        df = stock.listing.all_symbols()
+        # Parse CSV content
+        lines = response.text.strip().split('\n')
 
-        if df is not None and not df.empty and 'symbol' in df.columns:
-            all_symbols = df['symbol'].tolist()
-            print(f"[SUCCESS] Loaded {len(all_symbols)} symbols from VCI")
-            return sorted(set(all_symbols))
+        # Skip header and get symbols
+        symbols = []
+        for line in lines[1:]:  # Skip first line (header)
+            symbol = line.strip()
+            if symbol:  # Skip empty lines
+                symbols.append(symbol)
 
-        # Fallback nếu API lỗi
-        raise Exception("API error")
+        # Remove duplicates and sort
+        symbols = sorted(set(symbols))
+
+        print(f"[SUCCESS] Loaded {len(symbols)} symbols from Google Drive")
+        return symbols
 
     except Exception as e:
-        print(f"[WARNING] Failed to load symbols from VCI: {str(e)}")
-        # Fallback: danh sách phổ biến
+        print(f"[ERROR] Failed to load symbols from Google Drive: {str(e)}")
+        # Fallback list
         return sorted(set([
             'VNM', 'VCB', 'HPG', 'VHM', 'VIC', 'MSN', 'FPT', 'SSI',
             'MBB', 'TCB', 'CTG', 'ACB', 'VPB', 'VRE', 'GAS',
