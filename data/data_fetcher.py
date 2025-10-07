@@ -15,16 +15,12 @@ def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
     Cached for 5 minutes using Streamlit's built-in cache
 
     IMPORTANT:
-    - TCBS: Works for 1D but ignores date range for 1W/1M (returns all historical data)
-    - VCI: Works correctly for all intervals (1D, 1W, 1M) with proper date filtering
+    - TCBS: Works on Cloud, returns all data for 1W/1M (needs manual filtering)
+    - VCI: May be blocked on Cloud
+    - Strategy: Use TCBS first for all intervals, filter data manually
     """
-    # Choose source based on interval
-    # TCBS has bug: returns 250+ rows for 1W/1M instead of respecting date range
-    # VCI respects date range correctly for all intervals
-    if resolution in ['1W', '1M']:
-        sources = ['VCI', 'TCBS']  # VCI first for weekly/monthly
-    else:
-        sources = ['TCBS', 'VCI']  # TCBS first for daily (faster, more reliable on cloud)
+    # Use TCBS first for all intervals (works on Cloud)
+    sources = ['TCBS', 'VCI']
 
     for source in sources:
         try:
@@ -72,8 +68,13 @@ def fetch_stock_data_raw(symbol, start_date, end_date, resolution='1D'):
             if duplicates_removed > 0:
                 print(f"[WARNING] Removed {duplicates_removed} duplicate dates for {symbol} from {source}")
 
+            # Manual filter by date range (TCBS bug workaround for 1W/1M)
+            start_dt = pd.to_datetime(start_date)
+            end_dt = pd.to_datetime(end_date)
+            df = df[(df['time'] >= start_dt) & (df['time'] <= end_dt)].reset_index(drop=True)
+
             # Log success with source info
-            print(f"[SUCCESS] Fetched {symbol} from {source} ({len(df)} rows after dedup)")
+            print(f"[SUCCESS] Fetched {symbol} from {source} ({len(df)} rows after filter)")
 
             return df
 
