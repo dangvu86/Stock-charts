@@ -234,7 +234,14 @@ def calculate_market_breadth_history(df_with_indicators):
 # Main Application UI and Logic
 # =======================================================================================
 def main():
-    st.markdown("<h1 class='main-title'>📜 Xu hướng & Bề rộng Thị trường (Nâng cao)</h1>", unsafe_allow_html=True)
+    try:
+        col1, col2, col3 = st.columns([2,3,2])
+        with col2:
+            st.image("header.gif")
+    except FileNotFoundError:
+        pass
+
+    
     gdrive_link = "https://drive.google.com/file/d/1E0BDythcdIdGrIYdbJCNB0DxPHJ-njzc/view?usp=drive_link"
     master_df = load_data_from_gdrive(gdrive_link)
     if master_df is not None:
