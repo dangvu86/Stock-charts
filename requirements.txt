@@ -3,4 +3,6 @@ vnstock==3.2.6
 plotly>=5.18.0
 pandas>=2.1.0
 numpy>=1.24.0
-pandas-ta
+scipy>=1.11.0
+yfinance>=0.2.0
+requests>=2.31.0
