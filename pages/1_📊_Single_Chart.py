@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from data.data_fetcher import get_stock_data, get_available_symbols, format_price, calculate_change
 from utils.cache_manager import get_cache_stats
+from utils.timeline_helper import calculate_timeline_dates, get_default_timeline_index
 from indicators.technical import (
     add_rsi_subplot, add_macd_subplot, add_bollinger_bands,
     calculate_sma, calculate_ema
@@ -72,13 +73,8 @@ timeframe = st.sidebar.radio(
 # 3. Timeline (Khoảng thời gian hiển thị) - auto-adjust based on interval
 st.sidebar.subheader("📅 Khoảng thời gian")
 
-# Auto-adjust default timeline based on interval
-if timeframe == '1M':
-    default_timeline_index = 2  # 1 năm (12 nến) for monthly
-elif timeframe == '1W':
-    default_timeline_index = 2  # 1 năm (52 nến) for weekly
-else:
-    default_timeline_index = 2  # 1 năm for daily (default)
+# Use helper function for default timeline
+default_timeline_index = get_default_timeline_index(timeframe)
 
 timeline_option = st.sidebar.radio(
     "Timeline:",
@@ -87,18 +83,8 @@ timeline_option = st.sidebar.radio(
     horizontal=True
 )
 
-# Tính toán display_start và display_end dựa trên timeline
-display_end_default = datetime.now()
-if timeline_option == "3 tháng":
-    display_start_default = display_end_default - timedelta(days=90)
-elif timeline_option == "6 tháng":
-    display_start_default = display_end_default - timedelta(days=180)
-elif timeline_option == "1 năm":
-    display_start_default = display_end_default - timedelta(days=365)
-elif timeline_option == "YTD":
-    display_start_default = datetime(display_end_default.year, 1, 1)
-elif timeline_option == "Tùy chỉnh":
-    display_start_default = display_end_default - timedelta(days=365)
+# Use helper function to calculate timeline dates
+display_start_default, display_end_default = calculate_timeline_dates(timeline_option, timeframe)
 
 # Nếu chọn "Tùy chỉnh", hiển thị date picker
 if timeline_option == "Tùy chỉnh":

@@ -114,33 +114,15 @@ def get_stock_data(symbol, start_date, end_date, resolution='1D', return_indicat
     df = fetch_stock_data_raw(symbol, start_date, end_date, resolution)
 
     if return_indicators:
-        # Calculate indicators on-the-fly (simple approach)
-        from indicators.technical import (
-            calculate_sma, calculate_ema, calculate_rsi,
-            calculate_macd, calculate_bollinger_bands
-        )
+        # Reuse cache_manager's indicator calculation to avoid duplication
+        from utils.cache_manager import calculate_common_indicators
 
         if df is not None and not df.empty:
-            indicators = {}
             try:
-                # Common indicators
-                for period in [5, 10, 20, 50, 100, 200]:
-                    indicators[f'sma{period}'] = calculate_sma(df, period)
-                    indicators[f'ema{period}'] = calculate_ema(df, period)
-
-                indicators['rsi14'] = calculate_rsi(df, 14)
-
-                macd_data = calculate_macd(df)
-                indicators['macd'] = macd_data['macd']
-                indicators['macd_signal'] = macd_data['signal']
-                indicators['macd_histogram'] = macd_data['histogram']
-
-                bb_data = calculate_bollinger_bands(df, 20, 2)
-                indicators['bb_upper'] = bb_data['upper']
-                indicators['bb_middle'] = bb_data['middle']
-                indicators['bb_lower'] = bb_data['lower']
-            except:
-                pass
+                indicators = calculate_common_indicators(df)
+            except Exception as e:
+                print(f"[WARNING] Failed to calculate indicators for {symbol}: {e}")
+                indicators = {}
 
             return df, indicators
         else:
@@ -212,9 +194,12 @@ def get_available_symbols():
         # Skip header and get symbols
         symbols = []
         for line in lines[1:]:  # Skip first line (header)
-            symbol = line.strip()
-            if symbol:  # Skip empty lines
-                symbols.append(symbol)
+            line = line.strip()
+            if line:  # Skip empty lines
+                # Extract only first column (before comma)
+                symbol = line.split(',')[0].strip()
+                if symbol:
+                    symbols.append(symbol)
 
         # Remove duplicates and sort
         symbols = sorted(set(symbols))

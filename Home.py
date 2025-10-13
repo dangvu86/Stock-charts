@@ -15,6 +15,7 @@ from indicators.technical import calculate_sma, calculate_macd
 from utils.light_theme import (
     LIGHT_THEME, get_light_layout, get_light_axis_config, get_light_candlestick_config
 )
+from utils.timeline_helper import calculate_timeline_dates, get_default_timeline_index, get_expected_candles_info
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -70,13 +71,8 @@ st.sidebar.markdown("---")
 # 2. Timeline (Khoảng thời gian hiển thị)
 st.sidebar.subheader("📅 Khoảng thời gian")
 
-# Auto-adjust default timeline based on interval
-if interval == '1M':
-    default_timeline_index = 2  # 1 năm (12 nến) for monthly
-elif interval == '1W':
-    default_timeline_index = 2  # 1 năm (52 nến) for weekly
-else:
-    default_timeline_index = 1  # 6 tháng for daily
+# Use helper function for default timeline
+default_timeline_index = get_default_timeline_index(interval)
 
 timeline_option = st.sidebar.radio(
     "Timeline:",
@@ -85,32 +81,8 @@ timeline_option = st.sidebar.radio(
     horizontal=True
 )
 
-# Tính toán display_start và display_end dựa trên timeline
-# Auto-adjust timeline based on interval for better visibility
-display_end_default = datetime.now()
-
-# Adjust default timeline based on interval
-if interval == '1M' and timeline_option in ['3 tháng', '6 tháng']:
-    # For monthly chart, show more data (minimum 1 year)
-    if timeline_option == '3 tháng':
-        display_start_default = display_end_default - timedelta(days=365)  # 1 year instead
-    elif timeline_option == '6 tháng':
-        display_start_default = display_end_default - timedelta(days=730)  # 2 years instead
-elif interval == '1W' and timeline_option == '3 tháng':
-    # For weekly chart, 3 months is too short (only 12 candles)
-    display_start_default = display_end_default - timedelta(days=180)  # 6 months instead
-elif timeline_option == "3 tháng":
-    display_start_default = display_end_default - timedelta(days=90)
-elif timeline_option == "6 tháng":
-    display_start_default = display_end_default - timedelta(days=180)
-elif timeline_option == "1 năm":
-    display_start_default = display_end_default - timedelta(days=365)
-elif timeline_option == "YTD":
-    display_start_default = datetime(display_end_default.year, 1, 1)
-elif timeline_option == "Tùy chỉnh":
-    display_start_default = display_end_default - timedelta(days=180)
-else:
-    display_start_default = display_end_default - timedelta(days=180)
+# Use helper function to calculate timeline dates
+display_start_default, display_end_default = calculate_timeline_dates(timeline_option, interval)
 
 # Nếu chọn "Tùy chỉnh", hiển thị date picker
 if timeline_option == "Tùy chỉnh":
@@ -170,28 +142,8 @@ st.sidebar.info("💡 Chọn mã cổ phiếu ở dropdown trên mỗi chart")
 # Title
 st.markdown("<h1 style='text-align: center; color: #131722;'>📈 VN STOCK - MULTI CHART VIEW</h1>", unsafe_allow_html=True)
 
-# Display info with expected candle count
-expected_candles = {
-    '1D': {
-        '3 tháng': '~63 nến',
-        '6 tháng': '~126 nến',
-        '1 năm': '~252 nến',
-        'YTD': f'~{(datetime.now() - datetime(datetime.now().year, 1, 1)).days} nến',
-    },
-    '1W': {
-        '3 tháng': '~12 nến',
-        '6 tháng': '~26 nến',
-        '1 năm': '~52 nến',
-        'YTD': f'~{(datetime.now() - datetime(datetime.now().year, 1, 1)).days // 7} nến',
-    },
-    '1M': {
-        '3 tháng': '~3 nến',
-        '6 tháng': '~6 nến',
-        '1 năm': '~12 nến',
-        'YTD': f'~{datetime.now().month} nến',
-    }
-}
-candle_info = expected_candles.get(interval, {}).get(timeline_option, '')
+# Display info with expected candle count using helper
+candle_info = get_expected_candles_info(interval, timeline_option)
 st.markdown(f"<p style='text-align: center; color: #666;'>{interval_display} | {timeline_option} {candle_info} | MA20/MA50 | MACD</p>", unsafe_allow_html=True)
 st.markdown("---")
 
@@ -568,31 +520,46 @@ with chart_cols_1[0]:
         if fig1:
             st.plotly_chart(fig1, use_container_width=True, key='chart1')
         else:
-            st.error(f"❌ Không thể tạo chart {selected_symbols[0]}")
+            st.error(f"❌ Lỗi render chart **{selected_symbols[0]}**\n\n"
+                    f"💡 **Nguyên nhân**: Không đủ dữ liệu sau khi filter\n"
+                    f"🔧 **Giải pháp**: Mở rộng khoảng thời gian hoặc thử mã khác")
     else:
-        st.error(f"❌ Không thể tải data {selected_symbols[0]}\n\nVui lòng check logs hoặc thử Clear Cache")
+        st.error(f"❌ Không thể tải dữ liệu **{selected_symbols[0]}**\n\n"
+                f"💡 **Nguyên nhân có thể**:\n"
+                f"- API vnstock timeout\n"
+                f"- Mã CP không tồn tại hoặc chưa có dữ liệu\n"
+                f"- Lỗi kết nối mạng\n\n"
+                f"🔧 **Giải pháp**: Thử Clear Cache hoặc chọn mã khác")
 
 with chart_cols_1[1]:
-    fig2 = create_single_chart(
-        selected_symbols[1], stock_data_row1.get(selected_symbols[1]),
-        height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,
-        display_start_date=display_start, display_end_date=display_end, interval=interval
-    )
-    if fig2:
-        st.plotly_chart(fig2, use_container_width=True, key='chart2')
+    df2 = stock_data_row1.get(selected_symbols[1])
+    if df2 is not None and not df2.empty:
+        fig2 = create_single_chart(
+            selected_symbols[1], df2,
+            height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,
+            display_start_date=display_start, display_end_date=display_end, interval=interval
+        )
+        if fig2:
+            st.plotly_chart(fig2, use_container_width=True, key='chart2')
+        else:
+            st.error(f"❌ Lỗi render chart **{selected_symbols[1]}**")
     else:
-        st.error(f"❌ Không thể tải {selected_symbols[1]}")
+        st.error(f"❌ Không thể tải **{selected_symbols[1]}**")
 
 with chart_cols_1[2]:
-    fig3 = create_single_chart(
-        selected_symbols[2], stock_data_row1.get(selected_symbols[2]),
-        height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,
-        display_start_date=display_start, display_end_date=display_end, interval=interval
-    )
-    if fig3:
-        st.plotly_chart(fig3, use_container_width=True, key='chart3')
+    df3 = stock_data_row1.get(selected_symbols[2])
+    if df3 is not None and not df3.empty:
+        fig3 = create_single_chart(
+            selected_symbols[2], df3,
+            height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,
+            display_start_date=display_start, display_end_date=display_end, interval=interval
+        )
+        if fig3:
+            st.plotly_chart(fig3, use_container_width=True, key='chart3')
+        else:
+            st.error(f"❌ Lỗi render chart **{selected_symbols[2]}**")
     else:
-        st.error(f"❌ Không thể tải {selected_symbols[2]}")
+        st.error(f"❌ Không thể tải **{selected_symbols[2]}**")
 
 # BATCH 2: Load Row 2 (3 stocks parallel)
 with st.spinner(f'⚡ Đang tải hàng 2 ({interval_display})...'):
@@ -606,37 +573,49 @@ with st.spinner(f'⚡ Đang tải hàng 2 ({interval_display})...'):
 
 # Display Row 2 charts
 with chart_cols_2[0]:
-    fig4 = create_single_chart(
-        selected_symbols[3], stock_data_row2.get(selected_symbols[3]),
-        height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,
-        display_start_date=display_start, display_end_date=display_end, interval=interval
-    )
-    if fig4:
-        st.plotly_chart(fig4, use_container_width=True, key='chart4')
+    df4 = stock_data_row2.get(selected_symbols[3])
+    if df4 is not None and not df4.empty:
+        fig4 = create_single_chart(
+            selected_symbols[3], df4,
+            height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,
+            display_start_date=display_start, display_end_date=display_end, interval=interval
+        )
+        if fig4:
+            st.plotly_chart(fig4, use_container_width=True, key='chart4')
+        else:
+            st.error(f"❌ Lỗi render chart **{selected_symbols[3]}**")
     else:
-        st.error(f"❌ Không thể tải {selected_symbols[3]}")
+        st.error(f"❌ Không thể tải **{selected_symbols[3]}**")
 
 with chart_cols_2[1]:
-    fig5 = create_single_chart(
-        selected_symbols[4], stock_data_row2.get(selected_symbols[4]),
-        height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,
-        display_start_date=display_start, display_end_date=display_end, interval=interval
-    )
-    if fig5:
-        st.plotly_chart(fig5, use_container_width=True, key='chart5')
+    df5 = stock_data_row2.get(selected_symbols[4])
+    if df5 is not None and not df5.empty:
+        fig5 = create_single_chart(
+            selected_symbols[4], df5,
+            height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,
+            display_start_date=display_start, display_end_date=display_end, interval=interval
+        )
+        if fig5:
+            st.plotly_chart(fig5, use_container_width=True, key='chart5')
+        else:
+            st.error(f"❌ Lỗi render chart **{selected_symbols[4]}**")
     else:
-        st.error(f"❌ Không thể tải {selected_symbols[4]}")
+        st.error(f"❌ Không thể tải **{selected_symbols[4]}**")
 
 with chart_cols_2[2]:
-    fig6 = create_single_chart(
-        selected_symbols[5], stock_data_row2.get(selected_symbols[5]),
-        height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,
-        display_start_date=display_start, display_end_date=display_end, interval=interval
-    )
-    if fig6:
-        st.plotly_chart(fig6, use_container_width=True, key='chart6')
+    df6 = stock_data_row2.get(selected_symbols[5])
+    if df6 is not None and not df6.empty:
+        fig6 = create_single_chart(
+            selected_symbols[5], df6,
+            height=350, show_ma_list=ma_list, show_macd_ind=show_macd, show_volume_ind=show_volume,
+            display_start_date=display_start, display_end_date=display_end, interval=interval
+        )
+        if fig6:
+            st.plotly_chart(fig6, use_container_width=True, key='chart6')
+        else:
+            st.error(f"❌ Lỗi render chart **{selected_symbols[5]}**")
     else:
-        st.error(f"❌ Không thể tải {selected_symbols[5]}")
+        st.error(f"❌ Không thể tải **{selected_symbols[5]}**")
 
 # Footer
 st.markdown("---")
